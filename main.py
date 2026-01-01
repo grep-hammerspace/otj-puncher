@@ -14,8 +14,6 @@ import pandas as pd
 from dotenv import load_dotenv
 import os
 
-
-
 otj_df = pandas.read_csv("otjs.csv")
 unposted_otjs = otj_df[otj_df['posted'].isna()]
 
