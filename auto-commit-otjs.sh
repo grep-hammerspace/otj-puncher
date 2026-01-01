@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-
+set -e
+exec >> /var/log/otj-autocommit.log 2>&1
 
 # Directory and file to monitor
 DIRECTORY="/home/asad/PersonalProjects/Python/otj-puncher"
@@ -16,10 +17,8 @@ while true; do
     # Use inotifywait to watch for any access event (file execution)
     inotifywait -e open "$DIRECTORY/$FILE"  # This watches when the file is opened (likely when it's executed)
 
-    echo "$FILE has been executed. Monitoring its process..."
-
     # Wait for the main.py process to finish
-    pid=$(pgrep -f "$DIRECTORY/$FILE")  # Find the process ID (PID) of main.py
+    pid=$(pgrep -f "$DIRECTORY/$FILE" | head -n 1)  # Find the process ID (PID) of main.py
 
     if [ -n "$pid" ]; then
         # Wait for the process to finish
