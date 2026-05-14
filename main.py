@@ -91,7 +91,7 @@ post_data_template = {
 }
 
 # Endpoint to submit GET and POST requests.
-form_url = "https://www.smartassessor.co.uk/ETimeSheet/Form"
+login_url = "https://education.oneadvanced.com/"
 
 driver = webdriver.Firefox(service=Service("/snap/bin/geckodriver"))
 
@@ -112,7 +112,7 @@ def wait_for_element(by, selector, target_count=10, timeout=10, poll_interval=0.
 
 
 # Open target URL
-driver.get(form_url)
+driver.get(login_url)
 
 username = os.getenv("username")
 password = os.getenv("password")
@@ -153,7 +153,7 @@ while True:
 session_headers = None
 for request in driver.requests:
     print(request)
-    if request.headers.get("Referer") == form_url:
+    if request.headers.get("Referer") == login_url:
         session_headers = request.headers
 
 
@@ -176,7 +176,7 @@ else:
         post_data_template["ActivityStartTimeValue"] = row['start-time']
         post_data_template["DateCreated"] = f"{datetime.datetime.today().strftime("%d/%m/%Y")} 00:00:00"
         post_data_template["TimeValue"] = row['time-spent']
-        response = requests.post(form_url, headers=session_headers, data=post_data_template)
+        response = requests.post(login_url, headers=session_headers, data=post_data_template)
         if response.status_code == 200:
             # Persist information about successful logs, so we dont send the same thing twice.
             print("Status Code:", response.status_code)
