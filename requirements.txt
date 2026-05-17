@@ -7,3 +7,5 @@ packaging
 setuptools<70
 blinker<1.6
 pyOpenSSL<24
+flask
+jsonify

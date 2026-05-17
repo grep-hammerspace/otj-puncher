@@ -78,6 +78,7 @@ logs_post_url = "https://education.oneadvanced.com/api/cloud-education/v1/learne
 
 driver = webdriver.Firefox(service=Service("/snap/bin/geckodriver"))
 
+
 # try to write a method that will wait until a field is available
 def wait_for_element(by, selector, target_count=10, timeout=10, poll_interval=0.25):
     end_time = time.time() + timeout
