@@ -221,7 +221,23 @@ def log_activities():
     update_notes(content)
 
     log.info("Request complete — %d row(s) written to CSV", len(rows))
-    return jsonify({"status": "ok", "rows_added": len(rows)}), 200
+    return jsonify({"status": "ok", "rows_added": len(rows), "rows": rows}), 200
+
+
+@app.route('/reset-notes', methods=['DELETE'])
+def reset_notes():
+    log.info("DELETE /reset-notes received")
+    if not os.path.exists(NOTES_FILE):
+        msg = (
+            f"notes.txt does not exist at {NOTES_FILE} — nothing to delete. "
+            "The file is created automatically on the first call to /log-activities."
+        )
+        log.warning(msg)
+        return jsonify({"status": "not_found", "detail": msg}), 404
+
+    os.remove(NOTES_FILE)
+    log.info("notes.txt deleted — next call to /log-activities will treat all content as new")
+    return jsonify({"status": "ok", "detail": "notes.txt deleted. The next /log-activities call will treat all content as new."}), 200
 
 
 if __name__ == '__main__':
