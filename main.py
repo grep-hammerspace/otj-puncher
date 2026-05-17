@@ -75,7 +75,6 @@ post_data_template = {
 login_url = "https://education.oneadvanced.com/"
 timelog_url = "https://education.oneadvanced.com/cloud-education/timelog"
 logs_post_url = "https://education.oneadvanced.com/api/cloud-education/v1/learner/bfc1ec38-cee0-4f60-85ec-a7d3cc278e55/activity-log"
-dans_post_url = "https://education.oneadvanced.com/api/cloud-education/v1/learner/be605ce9-44ff-439e-8d55-47a8637a0313/activity-log"
 
 driver = webdriver.Firefox(service=Service("/snap/bin/geckodriver"))
 
@@ -132,7 +131,6 @@ while True:
 
 # At this point we are logged in, so we navigate to the timelog page
 driver.get(timelog_url)
-
 
 # Grab site cookies and format them for re-use when actually logging the data via POST calls
 session = requests.Session()
