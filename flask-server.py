@@ -79,7 +79,7 @@ def append_to_csv(rows: list[dict]) -> None:
                 row['time-spent'],
                 row['start-time'],
                 row['comments'],
-                'False',
+                '',
             ])
 
 
