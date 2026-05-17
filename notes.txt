@@ -1,0 +1,2 @@
+- Spent 2 hours doing a deep dive of asynchronous aka reactive programming in Java looking at Futures, Completeables and other async primitives
+- Rad about the JVM, class loaders, the garbage collector and byte code manipulation

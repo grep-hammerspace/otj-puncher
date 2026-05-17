@@ -1,3 +1,4 @@
+anthropic
 pandas
 selenium
 selenium-wire
