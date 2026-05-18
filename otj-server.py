@@ -187,7 +187,7 @@ def log_activities():
     except FileNotFoundError:
         msg = (
             f"Prompt file not found at {PROMPT_FILE}. "
-            "Expected: a file named 'llm_prompt.txt' in the same directory as flask-server.py. "
+            "Expected: a file named 'llm_prompt.txt' in the same directory as otj-server.py. "
             "Create the file with the LLM system prompt and retry."
         )
         log.error(msg)
