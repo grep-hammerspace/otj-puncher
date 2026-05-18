@@ -239,6 +239,19 @@ def reset_notes():
     log.info("notes.txt deleted — next call to /log-activities will treat all content as new")
     return jsonify({"status": "ok", "detail": "notes.txt deleted. The next /log-activities call will treat all content as new."}), 200
 
+@app.route('/submit-otjs', methods=['POST'])
+def submit_otjs():
+    data = request.get_json()
+    if not data:
+        msg = (
+            "Request body is missing the MFA code. "
+            "Expected: Content-Type: application/json with a JSON object body. "
+            "Got: no parseable JSON. Ensure the client sets Content-Type: application/json."
+        )
+        log.warning(msg)
+        return jsonify({"error": msg}), 400
+
+
 
 if __name__ == '__main__':
     log.info("Starting flask-server on 0.0.0.0:8945")
