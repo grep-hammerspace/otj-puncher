@@ -2,12 +2,15 @@ import csv
 import json
 import logging
 import os
+import threading
 from datetime import date
 from difflib import unified_diff
 
 import anthropic
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
+
+from puncher import prepare_browser, login_and_submit_otjs
 
 load_dotenv()
 
@@ -19,6 +22,24 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+_browser_driver = None
+_browser_lock = threading.Lock()
+
+
+def _init_browser():
+    global _browser_driver
+    log.info("Pre-loading browser to OTP page...")
+    try:
+        driver = prepare_browser()
+        with _browser_lock:
+            _browser_driver = driver
+        log.info("Browser ready at OTP page")
+    except Exception as e:
+        log.error("Failed to pre-load browser: %s", e)
+
+
+threading.Thread(target=_init_browser, daemon=True).start()
 
 NOTES_FILE  = os.path.join(os.path.dirname(__file__), 'notes.txt')
 OTJ_CSV     = os.path.join(os.path.dirname(__file__), 'otjs.csv')
@@ -241,6 +262,8 @@ def reset_notes():
 
 @app.route('/submit-otjs', methods=['POST'])
 def submit_otjs():
+    global _browser_driver
+
     data = request.get_json()
     if not data:
         msg = (
@@ -251,6 +274,27 @@ def submit_otjs():
         log.warning(msg)
         return jsonify({"error": msg}), 400
 
+    mfa_code = data.get('mfa_code', '').strip()
+
+    with _browser_lock:
+        driver = _browser_driver
+        _browser_driver = None
+
+    if driver is None:
+        msg = "Browser is not ready yet — still navigating to the OTP page. Try again in a few seconds."
+        log.warning(msg)
+        return jsonify({"error": msg}), 503
+
+    try:
+        result = login_and_submit_otjs(driver, mfa_code)
+    except Exception as e:
+        log.exception("Error during OTJ submission")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        # Always start a fresh browser prep for the next request
+        threading.Thread(target=_init_browser, daemon=True).start()
+
+    return jsonify({"status": "ok", "detail": result}), 200
 
 
 if __name__ == '__main__':
