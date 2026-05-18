@@ -19,7 +19,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-for _noisy in ("selenium", "urllib3", "werkzeug"):
+for _noisy in ("selenium", "urllib3", "werkzeug", "seleniumwire", "mitmproxy", "hpack", "h2"):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
 log = logging.getLogger(__name__)
 
@@ -295,6 +295,10 @@ def submit_otjs():
         return jsonify({"error": msg}), 400
 
     mfa_code = data.get('mfa_code', '').strip()
+    if not mfa_code:
+        msg = "The 'mfa_code' field is missing or empty."
+        log.warning(msg)
+        return jsonify({"error": msg}), 400
 
     with _browser_lock:
         driver = _browser_driver
@@ -307,13 +311,30 @@ def submit_otjs():
 
     try:
         result = login_and_submit_otjs(driver, mfa_code)
+    except ValueError as e:
+        log.warning("CSV validation error: %s", e)
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         log.exception("Error during OTJ submission")
         return jsonify({"error": str(e)}), 500
     finally:
-        _refresh_event.set()  # wake the refresh loop to get a new session immediately
+        _refresh_event.set()
 
-    return jsonify({"status": "ok", "detail": result}), 200
+    if result["nothing_to_post"]:
+        return jsonify({"status": "nothing_to_post", "detail": "No unposted OTJs found in otjs.csv."}), 200
+
+    posted = result["posted"]
+    failed = result["failed"]
+
+    if not failed:
+        log.info("All %d OTJ(s) posted successfully: rows %s", len(posted), posted)
+        return jsonify({"status": "ok", "posted_rows": posted}), 200
+    elif not posted:
+        log.error("All %d OTJ(s) failed to post: %s", len(failed), failed)
+        return jsonify({"status": "all_failed", "failed": failed}), 502
+    else:
+        log.warning("%d posted, %d failed: %s", len(posted), len(failed), failed)
+        return jsonify({"status": "partial", "posted_rows": posted, "failed": failed}), 207
 
 
 if __name__ == '__main__':

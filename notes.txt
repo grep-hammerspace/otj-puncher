@@ -1,2 +1,3 @@
-- Spent 2 hours doing a deep dive of asynchronous aka reactive programming in Java looking at Futures, Completeables and other async primitives
-- Rad about the JVM, class loaders, the garbage collector and byte code manipulation
+- spent an hour learning about the python interpreter and reading about the latest changes with the global interpreter lock ths allow multi threading 
+- Spent some time working on gs supplimentary curriculum, this module was about hashmap , I  started the implementation in golang
+- Read about gRPC and gRPC interceptors, they are used extensively in my tabs teams more modern cloud repo and I wanted to study up, used protocol to compile some go gRPC stubs as well

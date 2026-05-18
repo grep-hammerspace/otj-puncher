@@ -16,6 +16,15 @@ timelog_url = "https://education.oneadvanced.com/cloud-education/timelog"
 logs_post_url = "https://education.oneadvanced.com/api/cloud-education/v1/learner/bfc1ec38-cee0-4f60-85ec-a7d3cc278e55/activity-log"
 
 
+def _wait_for_url_change(driver, original_url, timeout=30, poll_interval=0.5):
+    end_time = time.time() + timeout
+    while time.time() < end_time:
+        if driver.current_url != original_url:
+            return
+        time.sleep(poll_interval)
+    raise TimeoutError(f"URL did not change from {original_url} within {timeout}s — MFA may have failed or timed out")
+
+
 def _wait_for_element(driver, by, selector, timeout=10, poll_interval=0.25):
     end_time = time.time() + timeout
     while True:
@@ -34,6 +43,8 @@ def prepare_browser() -> webdriver.Firefox:
     load_dotenv()
     options = Options()
     options.add_argument("--headless")
+    options.add_argument("--width=1920")
+    options.add_argument("--height=1080")
     driver = webdriver.Firefox(service=Service("/snap/bin/geckodriver"), options=options)
     driver.get(login_url)
 
@@ -47,42 +58,44 @@ def prepare_browser() -> webdriver.Firefox:
     return driver
 
 
-def login_and_submit_otjs(driver: webdriver.Firefox, mfa_code: str) -> str:
+def login_and_submit_otjs(driver: webdriver.Firefox, mfa_code: str) -> dict:
     otj_df = pandas.read_csv("otjs.csv")
     unposted_otjs = otj_df[otj_df['posted'].isna()]
     unposted_otjs = unposted_otjs.drop('posted', axis=1, inplace=False)
+
+    if unposted_otjs.empty:
+        driver.quit()
+        return {"posted": [], "failed": [], "nothing_to_post": True}
 
     def check_non_empty_or_whitespace(row, row_index):
         for val in row:
             if pd.isna(val) or str(val).strip() == '':
                 # We do row_index + 2 bc we lose 1 starting from instead of 0 in the csv, and another 1 when converting to a pd
-                raise ValueError(f"Row {row_index + 2} contains an empty string, whitespace, or NaN for a mandatory field. Mandatory fields are date, time-spent,start-time, and comments. Ensure mandatory fields are filled correctly then re run")
+                raise ValueError(f"Row {row_index + 2} contains an empty string, whitespace, or NaN for a mandatory field. Mandatory fields are date, time-spent, start-time, and comments.")
 
     def validate_date(date_value, row_index):
         try:
             pd.to_datetime(date_value, format='%Y/%m/%d')
         except ValueError:
-            raise ValueError(f"Row {row_index + 2} contains an invalid date format. Expected format: YYYY/MM/DD. Ensure the correct format then re-run")
+            raise ValueError(f"Row {row_index + 2} contains an invalid date format. Expected: YYYY/MM/DD.")
 
     def validate_time_spent(time_spent_value, row_index):
         try:
             pd.to_datetime(time_spent_value, format='%H:%M')
         except ValueError:
-            raise ValueError(f"Row {row_index + 2} contains an invalid time-spent format. Expected format: HH:MM. Ensure the correct format then re-run")
+            raise ValueError(f"Row {row_index + 2} contains an invalid time-spent format. Expected: HH:MM.")
 
     def validate_start_time(start_time_value, row_index):
         try:
             pd.to_datetime(start_time_value, format='%H:%M')
         except ValueError:
-            raise ValueError(f"Row {row_index + 2} contains an invalid start-time format. Expected format: HH:MM (24-hour format). Ensure the correct format then re-run")
+            raise ValueError(f"Row {row_index + 2} contains an invalid start-time format. Expected: HH:MM (24-hour).")
 
     for index, row in unposted_otjs.iterrows():
         check_non_empty_or_whitespace(row[:-1], index)
         validate_date(row['date'], index)
         validate_time_spent(row['time-spent'], index)
         validate_start_time(row['start-time'], index)
-
-    print("All checks passed successfully. The data is valid.")
 
     post_data_template = {
         "learnerId": "bfc1ec38-cee0-4f60-85ec-a7d3cc278e55",
@@ -101,9 +114,9 @@ def login_and_submit_otjs(driver: webdriver.Firefox, mfa_code: str) -> str:
     for char in mfa_code:
         input_field.send_keys(char)
         time.sleep(0.05)
+    otp_url = driver.current_url
     input_field.send_keys(Keys.RETURN)
-
-    driver.get(timelog_url)
+    _wait_for_url_change(driver, otp_url)  # block until auth redirect completes
 
     session = requests.Session()
     for cookie in driver.get_cookies():
@@ -111,8 +124,8 @@ def login_and_submit_otjs(driver: webdriver.Firefox, mfa_code: str) -> str:
 
     driver.quit()
 
-    print("Posting unposted otjs")
     posted = []
+    failed = []
 
     for index, row in unposted_otjs.iterrows():
         hours, minutes = row['time-spent'].split(':')
@@ -123,14 +136,10 @@ def login_and_submit_otjs(driver: webdriver.Firefox, mfa_code: str) -> str:
         post_data_template["minutes"] = minutes
         response = session.post(logs_post_url, json=post_data_template)
         if response.status_code == 200:
-            print("Status Code:", response.status_code)
-            print("Response Text:", response.text)
             otj_df.at[index, 'posted'] = True
             otj_df.to_csv('otjs.csv', index=False)
-            posted.append(index)
+            posted.append(index + 2)
         else:
-            print(f"------------------ Error Logging Otj In Row {index + 2} -----------------------------------")
-            print("Status Code:", response.status_code)
-            print("Response Text:", response.text)
+            failed.append({"row": index + 2, "status_code": response.status_code, "response": response.text})
 
-    return f"Posted {len(posted)} OTJ(s): rows {[i + 2 for i in posted]}"
+    return {"posted": posted, "failed": failed, "nothing_to_post": False}

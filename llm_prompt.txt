@@ -40,6 +40,10 @@ Scheduling rules — apply all of these strictly:
    Convert all to hours and minutes before applying the rules above.
 
 8. VALIDATING INPUTS: Each individual line of inputs should have a time spent and an activity, if you are unable to extract a time from the input, assume it is 1 hour.
+   If the input has a time period given ie 11:00 to 2:00 you should use that as the period and extrapolate the time spent, in this case it is 3 hours
+
+9. RANDOMISE START TIMES IF ONLY THE DURATION IS MENTIONED: hours can be logged at all times during the day, if there is only a duration on the input,
+   pick a random starting time, but make sure that it starts and ends within the workday still, as mentioned in rule 1
 
 Return only the JSON array. Example of valid output:
 [
