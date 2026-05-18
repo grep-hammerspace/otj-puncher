@@ -2,6 +2,7 @@ import pandas
 from selenium.common import NoSuchElementException
 from seleniumwire import webdriver
 from selenium.webdriver.firefox.service import Service
+from selenium.webdriver.firefox.options import Options
 import time
 import requests
 from selenium.webdriver.common.keys import Keys
@@ -31,7 +32,9 @@ def _wait_for_element(driver, by, selector, timeout=10, poll_interval=0.25):
 def prepare_browser() -> webdriver.Firefox:
     """Open browser and navigate to the OTP page, ready for MFA entry."""
     load_dotenv()
-    driver = webdriver.Firefox(service=Service("/snap/bin/geckodriver"))
+    options = Options()
+    options.add_argument("--headless")
+    driver = webdriver.Firefox(service=Service("/snap/bin/geckodriver"), options=options)
     driver.get(login_url)
 
     username = os.getenv("username")
