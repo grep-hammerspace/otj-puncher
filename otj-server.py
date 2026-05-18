@@ -27,21 +27,39 @@ app = Flask(__name__)
 
 _browser_driver = None
 _browser_lock = threading.Lock()
+_refresh_event = threading.Event()
+
+BROWSER_REFRESH_INTERVAL = 600  # seconds
 
 
-def _init_browser():
+def _browser_refresh_loop():
     global _browser_driver
-    log.info("Pre-loading browser to OTP page...")
-    try:
-        driver = prepare_browser()
+    while True:
+        log.info("Preparing browser session...")
+        try:
+            new_driver = prepare_browser()
+        except Exception as e:
+            log.error("Failed to prepare browser: %s — retrying in 60s", e)
+            _refresh_event.wait(timeout=60)
+            _refresh_event.clear()
+            continue
+
         with _browser_lock:
-            _browser_driver = driver
-        log.info("Browser ready at OTP page")
-    except Exception as e:
-        log.error("Failed to pre-load browser: %s", e)
+            old_driver = _browser_driver
+            _browser_driver = new_driver
+
+        if old_driver is not None:
+            try:
+                old_driver.quit()
+            except Exception:
+                pass
+
+        log.info("Browser ready at OTP page — next refresh in %ds", BROWSER_REFRESH_INTERVAL)
+        _refresh_event.wait(timeout=BROWSER_REFRESH_INTERVAL)
+        _refresh_event.clear()
 
 
-threading.Thread(target=_init_browser, daemon=True).start()
+threading.Thread(target=_browser_refresh_loop, daemon=True).start()
 
 NOTES_FILE  = os.path.join(os.path.dirname(__file__), 'notes.txt')
 OTJ_CSV     = os.path.join(os.path.dirname(__file__), 'otjs.csv')
@@ -293,8 +311,7 @@ def submit_otjs():
         log.exception("Error during OTJ submission")
         return jsonify({"error": str(e)}), 500
     finally:
-        # Always start a fresh browser prep for the next request
-        threading.Thread(target=_init_browser, daemon=True).start()
+        _refresh_event.set()  # wake the refresh loop to get a new session immediately
 
     return jsonify({"status": "ok", "detail": result}), 200
 
