@@ -128,6 +128,8 @@ def login_and_submit_otjs(driver: webdriver.Firefox, mfa_code: str) -> dict:
 
     driver.quit()
 
+    otj_df['posted'] = otj_df['posted'].astype(object)
+
     posted = []
     failed = []
 
