@@ -58,6 +58,34 @@ def prepare_browser() -> webdriver.Firefox:
     return driver
 
 
+def check_non_empty_or_whitespace(row, row_index):
+    for val in row:
+        if pd.isna(val) or str(val).strip() == '':
+            # row_index + 2: +1 for 1-based CSV rows, +1 for the header row
+            raise ValueError(f"Row {row_index + 2} contains an empty string, whitespace, or NaN for a mandatory field. Mandatory fields are date, time-spent, start-time, and comments.")
+
+
+def validate_date(date_value, row_index):
+    try:
+        pd.to_datetime(date_value, format='%Y/%m/%d')
+    except ValueError:
+        raise ValueError(f"Row {row_index + 2} contains an invalid date format. Expected: YYYY/MM/DD.")
+
+
+def validate_time_spent(time_spent_value, row_index):
+    try:
+        pd.to_datetime(time_spent_value, format='%H:%M')
+    except ValueError:
+        raise ValueError(f"Row {row_index + 2} contains an invalid time-spent format. Expected: HH:MM.")
+
+
+def validate_start_time(start_time_value, row_index):
+    try:
+        pd.to_datetime(start_time_value, format='%H:%M')
+    except ValueError:
+        raise ValueError(f"Row {row_index + 2} contains an invalid start-time format. Expected: HH:MM (24-hour).")
+
+
 def login_and_submit_otjs(driver: webdriver.Firefox, mfa_code: str) -> dict:
     otj_df = pandas.read_csv("otjs.csv")
     unposted_otjs = otj_df[otj_df['posted'].isna()]
@@ -66,30 +94,6 @@ def login_and_submit_otjs(driver: webdriver.Firefox, mfa_code: str) -> dict:
     if unposted_otjs.empty:
         driver.quit()
         return {"posted": [], "failed": [], "nothing_to_post": True}
-
-    def check_non_empty_or_whitespace(row, row_index):
-        for val in row:
-            if pd.isna(val) or str(val).strip() == '':
-                # We do row_index + 2 bc we lose 1 starting from instead of 0 in the csv, and another 1 when converting to a pd
-                raise ValueError(f"Row {row_index + 2} contains an empty string, whitespace, or NaN for a mandatory field. Mandatory fields are date, time-spent, start-time, and comments.")
-
-    def validate_date(date_value, row_index):
-        try:
-            pd.to_datetime(date_value, format='%Y/%m/%d')
-        except ValueError:
-            raise ValueError(f"Row {row_index + 2} contains an invalid date format. Expected: YYYY/MM/DD.")
-
-    def validate_time_spent(time_spent_value, row_index):
-        try:
-            pd.to_datetime(time_spent_value, format='%H:%M')
-        except ValueError:
-            raise ValueError(f"Row {row_index + 2} contains an invalid time-spent format. Expected: HH:MM.")
-
-    def validate_start_time(start_time_value, row_index):
-        try:
-            pd.to_datetime(start_time_value, format='%H:%M')
-        except ValueError:
-            raise ValueError(f"Row {row_index + 2} contains an invalid start-time format. Expected: HH:MM (24-hour).")
 
     for index, row in unposted_otjs.iterrows():
         check_non_empty_or_whitespace(row[:-1], index)

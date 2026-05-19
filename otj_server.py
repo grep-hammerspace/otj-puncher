@@ -27,39 +27,6 @@ app = Flask(__name__)
 
 _browser_driver = None
 _browser_lock = threading.Lock()
-_refresh_event = threading.Event()
-
-BROWSER_REFRESH_INTERVAL = 600  # seconds
-
-
-def _browser_refresh_loop():
-    global _browser_driver
-    while True:
-        log.info("Preparing browser session...")
-        try:
-            new_driver = prepare_browser()
-        except Exception as e:
-            log.error("Failed to prepare browser: %s — retrying in 60s", e)
-            _refresh_event.wait(timeout=60)
-            _refresh_event.clear()
-            continue
-
-        with _browser_lock:
-            old_driver = _browser_driver
-            _browser_driver = new_driver
-
-        if old_driver is not None:
-            try:
-                old_driver.quit()
-            except Exception:
-                pass
-
-        log.info("Browser ready at OTP page — next refresh in %ds", BROWSER_REFRESH_INTERVAL)
-        _refresh_event.wait(timeout=BROWSER_REFRESH_INTERVAL)
-        _refresh_event.clear()
-
-
-threading.Thread(target=_browser_refresh_loop, daemon=True).start()
 
 NOTES_FILE  = os.path.join(os.path.dirname(__file__), 'notes.txt')
 OTJ_CSV     = os.path.join(os.path.dirname(__file__), 'otjs.csv')
@@ -265,20 +232,74 @@ def log_activities():
     return jsonify({"status": "ok", "rows_added": len(rows), "rows": rows}), 200
 
 
+@app.route('/prepare-browser', methods=['GET'])
+def prepare_browser_endpoint():
+    global _browser_driver
+    log.info("GET /prepare-browser received — preparing browser session")
+
+    try:
+        new_driver = prepare_browser()
+    except Exception as e:
+        log.error("Failed to prepare browser: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+    with _browser_lock:
+        old_driver = _browser_driver
+        _browser_driver = new_driver
+
+    if old_driver is not None:
+        try:
+            old_driver.quit()
+        except Exception:
+            pass
+
+    log.info("Browser ready at OTP page")
+    return jsonify({"status": "ready"}), 200
+
+
 @app.route('/reset-notes', methods=['DELETE'])
 def reset_notes():
     log.info("DELETE /reset-notes received")
-    if not os.path.exists(NOTES_FILE):
-        msg = (
-            f"notes.txt does not exist at {NOTES_FILE} — nothing to delete. "
-            "The file is created automatically on the first call to /log-activities."
-        )
-        log.warning(msg)
-        return jsonify({"status": "not_found", "detail": msg}), 404
 
-    os.remove(NOTES_FILE)
-    log.info("notes.txt deleted — next call to /log-activities will treat all content as new")
-    return jsonify({"status": "ok", "detail": "notes.txt deleted. The next /log-activities call will treat all content as new."}), 200
+    if os.path.exists(NOTES_FILE):
+        os.remove(NOTES_FILE)
+        log.info("notes.txt deleted")
+    else:
+        log.info("notes.txt did not exist — skipping")
+
+    with open(OTJ_CSV, 'w', newline='') as f:
+        csv.writer(f).writerow(['date', 'time-spent', 'start-time', 'comments', 'posted'])
+    log.info("otjs.csv cleared (header preserved)")
+
+    return jsonify({"status": "ok"}), 200
+
+@app.route('/clear-last-row', methods=['DELETE'])
+def clear_last_row():
+    log.info("DELETE /clear-last-row received")
+
+    with open(OTJ_CSV, 'r', newline='') as f:
+        rows = list(csv.reader(f))
+
+    if len(rows) <= 1:
+        return jsonify({"error": "No data rows to remove."}), 400
+
+    removed_csv_row = rows.pop()
+    with open(OTJ_CSV, 'w', newline='') as f:
+        csv.writer(f).writerows(rows)
+    log.info("Removed last CSV row: %s", removed_csv_row)
+
+    if os.path.exists(NOTES_FILE):
+        with open(NOTES_FILE, 'r') as f:
+            lines = f.readlines()
+        lines = lines[:-1] if lines else lines
+        with open(NOTES_FILE, 'w') as f:
+            f.writelines(lines)
+        log.info("Removed last line from notes.txt")
+    else:
+        log.info("notes.txt did not exist — skipping")
+
+    return jsonify({"status": "ok", "removed_row": removed_csv_row}), 200
+
 
 @app.route('/submit-otjs', methods=['POST'])
 def submit_otjs():
@@ -317,8 +338,6 @@ def submit_otjs():
     except Exception as e:
         log.exception("Error during OTJ submission")
         return jsonify({"error": str(e)}), 500
-    finally:
-        _refresh_event.set()
 
     if result["nothing_to_post"]:
         return jsonify({"status": "nothing_to_post", "detail": "No unposted OTJs found in otjs.csv."}), 200

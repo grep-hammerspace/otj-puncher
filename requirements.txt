@@ -8,5 +8,6 @@ packaging
 setuptools<70
 blinker<1.6
 pyOpenSSL<24
-flask
+flask<3
+werkzeug<3
 jsonify
