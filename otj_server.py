@@ -107,7 +107,7 @@ def call_llm(system_prompt: str, diff: str, today: str) -> list[dict]:
         log.debug("Stripped markdown fences. Cleaned response:\n%s", response_text)
 
     rows = json.loads(response_text)
-    log.info("LLM returned %d row(s) to write to CSV", len(rows))
+    log.info("LLM returned %d row(s)", len(rows))
     for i, row in enumerate(rows):
         log.debug("  Row %d: %s", i + 1, row)
     return rows
@@ -214,13 +214,20 @@ def log_activities():
         log.exception(msg)
         return jsonify({"error": msg}), 500
 
+    ok_rows = [r for r in rows if 'error' not in r]
+    error_rows = [r for r in rows if 'error' in r]
+
+    for r in error_rows:
+        log.warning("LLM could not parse input line — %s: %r", r.get('error'), r.get('raw'))
+
     try:
-        append_to_csv(rows)
+        if ok_rows:
+            append_to_csv(ok_rows)
     except KeyError as e:
         msg = (
             f"LLM response is missing an expected field: {e}. "
             "Expected each row object to contain: 'date', 'time-spent', 'start-time', 'comments'. "
-            f"Got rows: {rows}. "
+            f"Got rows: {ok_rows}. "
             "Update llm_prompt.txt to enforce the correct output schema."
         )
         log.error(msg)
@@ -228,8 +235,11 @@ def log_activities():
 
     update_notes(content)
 
-    log.info("Request complete — %d row(s) written to CSV", len(rows))
-    return jsonify({"status": "ok", "rows_added": len(rows), "rows": rows}), 200
+    log.info("Request complete — %d row(s) written, %d error(s)", len(ok_rows), len(error_rows))
+    response = {"status": "ok", "rows_added": len(ok_rows), "rows": ok_rows}
+    if error_rows:
+        response["parse_errors"] = error_rows
+    return jsonify(response), 200
 
 
 @app.route('/prepare-browser', methods=['GET'])

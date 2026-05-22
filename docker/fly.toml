@@ -1,5 +1,5 @@
 app = "hours-api"
-primary_region = "lhr"        # Londoncan y
+primary_region = "lhr"        # London
 
 [build]
   dockerfile = "Dockerfile"

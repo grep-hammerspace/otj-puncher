@@ -111,6 +111,66 @@ def test_log_activities_llm_row_missing_key(client, monkeypatch):
     assert resp.status_code == 500
 
 
+def test_log_activities_all_error_rows_writes_nothing(client, tmp_csv, monkeypatch):
+    c, srv = client
+    llm_response = [
+        {'error': 'missing_duration', 'message': 'No duration found in input', 'raw': 'did some work today'},
+        {'error': 'missing_description', 'message': 'No activity description found in input', 'raw': '2 hours'},
+    ]
+    mock_msg = MagicMock()
+    mock_msg.content = [MagicMock(text=json.dumps(llm_response))]
+    monkeypatch.setattr(srv.anthropic_client.messages, 'create', lambda **kw: mock_msg)
+
+    resp = c.post('/log-activities', json={'content': 'new content\n'})
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data['rows_added'] == 0
+    assert data['rows'] == []
+    assert len(data['parse_errors']) == 2
+    assert data['parse_errors'][0]['error'] == 'missing_duration'
+    assert 'duration' in data['parse_errors'][0]['message'].lower()
+    assert data['parse_errors'][1]['error'] == 'missing_description'
+    assert 'description' in data['parse_errors'][1]['message'].lower()
+
+    with open(tmp_csv) as f:
+        rows = list(csv.reader(f))
+    assert rows == [CSV_HEADER]  # no data rows written
+
+
+def test_log_activities_mixed_rows_writes_only_valid(client, tmp_csv, monkeypatch):
+    c, srv = client
+    valid_row = {
+        'date': '2026/05/22',
+        'time-spent': '2:00',
+        'start-time': '10:00',
+        'comments': 'Worked on IOT554 assignment',
+        'posted': '',
+    }
+    llm_response = [
+        valid_row,
+        {'error': 'missing_duration', 'message': 'No duration found in input', 'raw': 'had a meeting'},
+    ]
+    mock_msg = MagicMock()
+    mock_msg.content = [MagicMock(text=json.dumps(llm_response))]
+    monkeypatch.setattr(srv.anthropic_client.messages, 'create', lambda **kw: mock_msg)
+
+    resp = c.post('/log-activities', json={'content': 'new content\n'})
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data['rows_added'] == 1
+    assert len(data['rows']) == 1
+    assert data['rows'][0]['comments'] == 'Worked on IOT554 assignment'
+    assert len(data['parse_errors']) == 1
+    assert data['parse_errors'][0]['raw'] == 'had a meeting'
+
+    with open(tmp_csv) as f:
+        rows = list(csv.reader(f))
+    assert len(rows) == 2  # header + 1 valid row only
+    assert rows[1][3] == 'Worked on IOT554 assignment'
+
+
 # ---------------------------------------------------------------------------
 # GET /prepare-browser
 # ---------------------------------------------------------------------------
