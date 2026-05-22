@@ -1,9 +1,14 @@
+FROM tailscale/tailscale:latest AS tailscale
+
 FROM python:3.12-slim
+
+COPY --from=tailscale /usr/local/bin/tailscale /usr/local/bin/tailscale
+COPY --from=tailscale /usr/local/bin/tailscaled /usr/local/bin/tailscaled
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    jq \
     firefox-esr \
-    && curl -fsSL https://tailscale.com/install.sh | sh \
     && rm -rf /var/lib/apt/lists/*
 
 # Install geckodriver
